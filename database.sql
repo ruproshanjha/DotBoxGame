@@ -357,6 +357,8 @@ declare
   v_winner_id uuid := null;
   v_new_status text;
   v_new_current_player uuid;
+  v_board_size integer;
+  v_box_count integer;
 begin
   -- Get current user ID
   v_user_id := auth.uid();
@@ -388,11 +390,13 @@ begin
   v_claimed := v_game.claimed_boxes;
   v_score_p1 := v_game.player1_score;
   v_score_p2 := v_game.player2_score;
+  v_board_size := v_game.board_size;
+  v_box_count := v_board_size - 1;
 
   -- Apply move to grid
   if p_line_type = 'horizontal' then
-    -- Check bounds (4x3 horizontal lines: 0<=r<4, 0<=c<3)
-    if p_r < 0 or p_r >= 4 or p_c < 0 or p_c >= 3 then
+    -- Check bounds (board_size x box_count)
+    if p_r < 0 or p_r >= v_board_size or p_c < 0 or p_c >= v_box_count then
       return json_build_object('success', false, 'error', 'Line coordinate out of bounds');
     end if;
     
@@ -404,8 +408,8 @@ begin
     v_horizontal := jsonb_set(v_horizontal, array[p_r::text, p_c::text], 'true'::jsonb);
 
   elsif p_line_type = 'vertical' then
-    -- Check bounds (3x4 vertical lines: 0<=r<3, 0<=c<4)
-    if p_r < 0 or p_r >= 3 or p_c < 0 or p_c >= 4 then
+    -- Check bounds (box_count x board_size)
+    if p_r < 0 or p_r >= v_box_count or p_c < 0 or p_c >= v_board_size then
       return json_build_object('success', false, 'error', 'Line coordinate out of bounds');
     end if;
     
@@ -420,9 +424,9 @@ begin
     return json_build_object('success', false, 'error', 'Invalid line type');
   end if;
 
-  -- Scan 3x3 boxes to detect newly completed ones
-  for v_br in 0..2 loop
-    for v_bc in 0..2 loop
+  -- Scan boxes dynamically to detect newly completed ones
+  for v_br in 0..(v_box_count - 1) loop
+    for v_bc in 0..(v_box_count - 1) loop
       -- Only check if this box is currently uncompleted
       if (v_claimed->v_br->>v_bc) is null or (v_claimed->v_br->>v_bc) = '' then
         -- Check if all 4 surrounding lines are now completed:
@@ -458,17 +462,17 @@ begin
     end if;
   end if;
 
-  -- Check if game is completed (9 boxes total)
+  -- Check if game is completed
   v_total_boxes := 0;
-  for v_br in 0..2 loop
-    for v_bc in 0..2 loop
+  for v_br in 0..(v_box_count - 1) loop
+    for v_bc in 0..(v_box_count - 1) loop
       if (v_claimed->v_br->>v_bc) is not null and (v_claimed->v_br->>v_bc) <> '' then
         v_total_boxes := v_total_boxes + 1;
       end if;
     end loop;
   end loop;
 
-  if v_total_boxes = 9 then
+  if v_total_boxes = v_box_count * v_box_count then
     v_new_status := 'finished';
     v_new_current_player := null;
     -- Determine winner
