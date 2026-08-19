@@ -26,11 +26,110 @@ export default function GamePage() {
   const [moveSubmitting, setMoveSubmitting] = useState(false);
   const [saveTriggered, setSaveTriggered] = useState(false);
 
+  // Timer state (5.0 seconds for each turn)
+  const [timeLeft, setTimeLeft] = useState<number>(5.0);
+
   // Sync ref for game state (needed in bot effect)
   const gameStateRef = useRef<GameState | null>(null);
   useEffect(() => {
     gameStateRef.current = gameState;
   }, [gameState]);
+
+  // Reset timer on turn/game update
+  useEffect(() => {
+    if (!gameState || gameState.status !== 'playing') return;
+    setTimeLeft(5.0);
+  }, [gameState?.current_player_id, gameState?.horizontal_lines, gameState?.vertical_lines]);
+
+  // Turn Countdown Timer Loop
+  useEffect(() => {
+    if (!gameState || gameState.status !== 'playing') return;
+
+    const interval = setInterval(() => {
+      setTimeLeft((prev) => {
+        const nextTime = Math.round((prev - 0.1) * 10) / 10;
+        
+        // Timeout trigger logic
+        if (nextTime <= 0) {
+          clearInterval(interval);
+          handleTurnTimeout();
+          return 0;
+        }
+        return nextTime;
+      });
+    }, 100);
+
+    return () => clearInterval(interval);
+  }, [gameState?.current_player_id, gameState?.horizontal_lines, gameState?.vertical_lines]);
+
+  const handleTurnTimeout = async () => {
+    if (!gameState || !user) return;
+
+    const isMyTurn = gameState.current_player_id === user.id;
+    if (isMyTurn) {
+      // Find all remaining valid lines
+      const unselectedLines: { type: 'horizontal' | 'vertical'; r: number; c: number }[] = [];
+      
+      // Horizontal lines (4x3)
+      for (let r = 0; r < 4; r++) {
+        for (let c = 0; c < 3; c++) {
+          if (!gameState.horizontal_lines[r][c]) {
+            unselectedLines.push({ type: 'horizontal', r, c });
+          }
+        }
+      }
+      
+      // Vertical lines (3x4)
+      for (let r = 0; r < 3; r++) {
+        for (let c = 0; c < 4; c++) {
+          if (!gameState.vertical_lines[r][c]) {
+            unselectedLines.push({ type: 'vertical', r, c });
+          }
+        }
+      }
+      
+      if (unselectedLines.length === 0) return;
+      
+      // Select a random unselected line
+      const randomLine = unselectedLines[Math.floor(Math.random() * unselectedLines.length)];
+      
+      // Automatically apply random move
+      handleLineClick(randomLine.type, randomLine.r, randomLine.c);
+    } else if (!isBotGame) {
+      // If it's the opponent's turn, we give them a 5-second buffer (total 10 seconds since updated_at)
+      // before our browser claims a forfeit victory and finishes the idle game
+      setTimeout(async () => {
+        // Fetch latest state to verify they didn't play a move in the last second
+        try {
+          const { data: latestGame } = await supabase
+            .from('games')
+            .select('updated_at, status, current_player_id')
+            .eq('id', id)
+            .single();
+
+          if (
+            latestGame && 
+            latestGame.status === 'playing' && 
+            latestGame.current_player_id !== user.id
+          ) {
+            // Claim forfeit!
+            const { data, error } = await supabase.rpc('claim_forfeit', {
+              p_game_id: id
+            });
+            
+            if (!error) {
+              const res = typeof data === 'string' ? JSON.parse(data) : data;
+              if (res.success) {
+                fetchMultiplayerGame(true);
+              }
+            }
+          }
+        } catch (err) {
+          console.error('Error auto-forfeiting opponent:', err);
+        }
+      }, 5000); // 5s extra timeout buffer
+    }
+  };
 
   // 1. INITIALIZE GAME STATE
   useEffect(() => {
@@ -106,6 +205,30 @@ export default function GamePage() {
         .single();
 
       if (error) throw error;
+
+      // Inactivity cleanup check: If game has been idle for more than 60 seconds, auto-forfeit it!
+      if (game.status === 'playing') {
+        const lastUpdated = new Date(game.updated_at).getTime();
+        const nowTime = new Date().getTime();
+        if (nowTime - lastUpdated > 60000) {
+          console.log('Inactivity detected. Auto-forfeiting game.');
+          await supabase.rpc('claim_forfeit', { p_game_id: id });
+          // Quietly refetch to get the finished state
+          const { data: updatedGame } = await supabase
+            .from('games')
+            .select(`
+              *,
+              player1:profiles!player1_id(display_name, avatar_url),
+              player2:profiles!player2_id(display_name, avatar_url)
+            `)
+            .eq('id', id)
+            .single();
+          if (updatedGame) {
+            setGameState(updatedGame as any);
+          }
+          return;
+        }
+      }
 
       setGameState(game as any);
       
@@ -306,15 +429,30 @@ export default function GamePage() {
           </div>
         </section>
 
-        {/* Turn Status Message */}
-        <div className={`mb-6 text-center text-xs font-black tracking-widest uppercase transition-all duration-300 ${activeTurnGlow}`}>
-          {gameState.status === 'playing' ? (
-            <span className="flex items-center justify-center gap-2">
-              <span className={`w-1.5 h-1.5 rounded-full animate-ping ${isYourTurn ? (isP1 ? 'bg-violet-500' : 'bg-emerald-500') : 'bg-gray-500'}`} />
-              {turnName}
-            </span>
-          ) : (
-            'GAME COMPLETED'
+        {/* Turn Status Message & Timer Loader */}
+        <div className="w-full max-w-[360px] flex flex-col gap-2 mb-6">
+          <div className={`text-center text-xs font-black tracking-widest uppercase transition-all duration-300 ${activeTurnGlow}`}>
+            {gameState.status === 'playing' ? (
+              <span className="flex items-center justify-center gap-2">
+                <span className={`w-1.5 h-1.5 rounded-full animate-ping ${isYourTurn ? (isP1 ? 'bg-violet-500' : 'bg-emerald-500') : 'bg-gray-500'}`} />
+                {turnName} ({timeLeft.toFixed(1)}s)
+              </span>
+            ) : (
+              'GAME COMPLETED'
+            )}
+          </div>
+          
+          {gameState.status === 'playing' && (
+            <div className="w-full h-1 bg-gray-950 border border-gray-900 rounded-full overflow-hidden shadow-inner">
+              <div 
+                className={`h-full transition-all duration-100 ease-linear rounded-full ${
+                  isYourTurn 
+                    ? (isP1 ? 'bg-gradient-to-r from-violet-600 to-indigo-600 shadow-[0_0_10px_rgba(99,102,241,0.5)]' : 'bg-gradient-to-r from-emerald-500 to-teal-500 shadow-[0_0_10px_rgba(16,185,129,0.5)]') 
+                    : 'bg-red-500 animate-pulse'
+                }`}
+                style={{ width: `${(timeLeft / 5.0) * 100}%` }}
+              />
+            </div>
           )}
         </div>
 

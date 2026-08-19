@@ -515,6 +515,55 @@ begin
 end;
 $$ language plpgsql security definer;
 
+-- 8.5. CLAIM FORFEIT RPC FUNCTION
+create or replace function public.claim_forfeit(p_game_id uuid)
+returns json as $$
+declare
+  v_game record;
+  v_user_id uuid;
+  v_winner_id uuid;
+begin
+  v_user_id := auth.uid();
+  if v_user_id is null then
+    return json_build_object('success', false, 'error', 'Unauthorized');
+  end if;
+  
+  select * into v_game from public.games where id = p_game_id for update;
+  if not found then
+    return json_build_object('success', false, 'error', 'Game not found');
+  end if;
+  
+  if v_game.status <> 'playing' then
+    return json_build_object('success', false, 'error', 'Game is not active');
+  end if;
+  
+  if v_game.player1_id <> v_user_id and v_game.player2_id <> v_user_id then
+    return json_build_object('success', false, 'error', 'You are not a player in this game');
+  end if;
+  
+  -- Check if game has been idle for more than 10 seconds
+  if now() - v_game.updated_at < interval '10 seconds' then
+    return json_build_object('success', false, 'error', 'Game is not timed out yet');
+  end if;
+  
+  -- Determine winner (the player who did NOT timeout)
+  if v_game.current_player_id = v_game.player1_id then
+    v_winner_id := v_game.player2_id;
+  else
+    v_winner_id := v_game.player1_id;
+  end if;
+  
+  update public.games
+  set status = 'finished',
+      winner_id = v_winner_id,
+      current_player_id = null,
+      updated_at = now()
+  where id = p_game_id;
+  
+  return json_build_object('success', true, 'winner_id', v_winner_id);
+end;
+$$ language plpgsql security definer;
+
 -- 9. ENABLE REALTIME REPLICATION FOR ACTIVE SYNCING
 begin;
   -- delete any old publication configuration if existing
