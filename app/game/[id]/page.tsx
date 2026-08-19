@@ -28,22 +28,39 @@ export default function GamePage() {
 
   // Timer state (5.0 seconds for each turn)
   const [timeLeft, setTimeLeft] = useState<number>(5.0);
+  const [isBothPlayersOnline, setIsBothPlayersOnline] = useState<boolean>(isBotGame);
 
-  // Sync ref for game state (needed in bot effect)
+  // Sync ref for game state (needed in bot/presence effects)
   const gameStateRef = useRef<GameState | null>(null);
   useEffect(() => {
     gameStateRef.current = gameState;
   }, [gameState]);
 
-  // Reset timer on turn/game update
+  // Fallback to start timer if WebSockets are blocked and both players have joined
+  useEffect(() => {
+    if (isBotGame || isBothPlayersOnline) return;
+    if (gameState && gameState.player2_id && gameState.status === 'playing') {
+      const timer = setTimeout(() => {
+        setIsBothPlayersOnline(true);
+      }, 5000); // 5 seconds fallback buffer
+      return () => clearTimeout(timer);
+    }
+  }, [gameState?.player2_id, gameState?.status, isBothPlayersOnline, isBotGame]);
+
+  // Reset timer on turn/game update (using primitive updated_at string to prevent duplicate reference-based resets)
   useEffect(() => {
     if (!gameState || gameState.status !== 'playing') return;
     setTimeLeft(5.0);
-  }, [gameState?.current_player_id, gameState?.horizontal_lines, gameState?.vertical_lines]);
+  }, [gameState?.current_player_id, gameState?.updated_at]);
 
   // Turn Countdown Timer Loop
   useEffect(() => {
     if (!gameState || gameState.status !== 'playing') return;
+    if (!isBotGame && !isBothPlayersOnline) {
+      // Pause timer at 5.0 until both players connect to the board
+      setTimeLeft(5.0);
+      return;
+    }
 
     const interval = setInterval(() => {
       setTimeLeft((prev) => {
@@ -60,7 +77,7 @@ export default function GamePage() {
     }, 100);
 
     return () => clearInterval(interval);
-  }, [gameState?.current_player_id, gameState?.horizontal_lines, gameState?.vertical_lines]);
+  }, [gameState?.current_player_id, gameState?.updated_at, isBothPlayersOnline, isBotGame]);
 
   const handleTurnTimeout = async () => {
     if (!gameState || !user) return;
@@ -154,7 +171,13 @@ export default function GamePage() {
 
       // Subscribe to Realtime Updates
       const channel = supabase
-        .channel(`game_play_${id}`)
+        .channel(`game_play_${id}`, {
+          config: {
+            presence: {
+              key: user.id,
+            },
+          },
+        })
         .on(
           'postgres_changes',
           {
@@ -177,7 +200,22 @@ export default function GamePage() {
             });
           }
         )
-        .subscribe();
+        .on('presence', { event: 'sync' }, () => {
+          const state = channel.presenceState();
+          const onlineUserIds = Object.keys(state);
+          // Check if both players are present on this channel
+          const p1Id = gameStateRef.current?.player1_id;
+          const p2Id = gameStateRef.current?.player2_id;
+          if (p1Id && p2Id) {
+            const bothOnline = onlineUserIds.includes(p1Id) && onlineUserIds.includes(p2Id);
+            setIsBothPlayersOnline(bothOnline);
+          }
+        })
+        .subscribe(async (status) => {
+          if (status === 'SUBSCRIBED') {
+            await channel.track({ online_at: new Date().toISOString() });
+          }
+        });
 
       // Fallback Polling every 3 seconds to keep state fresh under WebSocket failures
       const pollInterval = setInterval(() => {
@@ -430,19 +468,26 @@ export default function GamePage() {
         </section>
 
         {/* Turn Status Message & Timer Loader */}
-        <div className="w-full max-w-[360px] flex flex-col gap-2 mb-6">
+        <div className="w-full max-w-[360px] flex flex-col gap-2.5 mb-6">
           <div className={`text-center text-xs font-black tracking-widest uppercase transition-all duration-300 ${activeTurnGlow}`}>
             {gameState.status === 'playing' ? (
-              <span className="flex items-center justify-center gap-2">
-                <span className={`w-1.5 h-1.5 rounded-full animate-ping ${isYourTurn ? (isP1 ? 'bg-violet-500' : 'bg-emerald-500') : 'bg-gray-500'}`} />
-                {turnName} ({timeLeft.toFixed(1)}s)
-              </span>
+              !isBotGame && !isBothPlayersOnline ? (
+                <span className="flex items-center justify-center gap-2 animate-pulse text-gray-500">
+                  <span className="w-1.5 h-1.5 rounded-full bg-gray-600 animate-ping" />
+                  WAITING FOR PLAYERS TO JOIN...
+                </span>
+              ) : (
+                <span className="flex items-center justify-center gap-2">
+                  <span className={`w-1.5 h-1.5 rounded-full animate-ping ${isYourTurn ? (isP1 ? 'bg-violet-500' : 'bg-emerald-500') : 'bg-gray-500'}`} />
+                  {turnName} ({timeLeft.toFixed(1)}s)
+                </span>
+              )
             ) : (
               'GAME COMPLETED'
             )}
           </div>
           
-          {gameState.status === 'playing' && (
+          {gameState.status === 'playing' && (isBotGame || isBothPlayersOnline) && (
             <div className="w-full h-1 bg-gray-950 border border-gray-900 rounded-full overflow-hidden shadow-inner">
               <div 
                 className={`h-full transition-all duration-100 ease-linear rounded-full ${

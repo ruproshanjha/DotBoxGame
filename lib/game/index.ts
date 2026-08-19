@@ -11,6 +11,8 @@ export interface GameState {
   status: 'waiting' | 'playing' | 'finished';
   winner_id: string | null;
   game_mode: 'quick' | 'private' | 'bot';
+  updated_at?: string;
+  created_at?: string;
 }
 
 export interface GameMove {
