@@ -97,8 +97,8 @@ create policy "Users can update their own profile"
 create policy "Games are viewable by authenticated users"
   on public.games for select using (auth.uid() is not null);
 
-create policy "Players can update their active games"
-  on public.games for update using (auth.uid() = player1_id or auth.uid() = player2_id);
+create policy "Players or prospective Player 2 can update games"
+  on public.games for update using (auth.uid() = player1_id or player2_id is null or auth.uid() = player2_id);
 
 -- Players can insert games
 create policy "Players can insert games"
@@ -111,8 +111,8 @@ create policy "Rooms are viewable by authenticated users"
 create policy "Host can insert room"
   on public.rooms for insert with check (auth.uid() = host_id);
 
-create policy "Host or Guest can update room"
-  on public.rooms for update using (auth.uid() = host_id or auth.uid() = guest_id);
+create policy "Host, Guest or prospective Guest can update room"
+  on public.rooms for update using (auth.uid() = host_id or guest_id is null or auth.uid() = guest_id);
 
 -- Matchmaking Queue policies
 create policy "Queue is viewable by authenticated users"
