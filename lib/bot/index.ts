@@ -33,6 +33,31 @@ function countBoxLines(state: GameState, br: number, bc: number): number {
 }
 
 /**
+ * Checks how many boxes are completed if a move is applied
+ */
+function checkIfMoveCompletesBox(state: GameState, move: GameMove): number {
+  const { type, r, c } = move;
+  const originalVal = type === 'horizontal' ? state.horizontal_lines[r][c] : state.vertical_lines[r][c];
+  
+  if (type === 'horizontal') {
+    state.horizontal_lines[r][c] = true;
+  } else {
+    state.vertical_lines[r][c] = true;
+  }
+  
+  const completed = checkCompletedBoxes(state, move).length;
+  
+  // Restore original value
+  if (type === 'horizontal') {
+    state.horizontal_lines[r][c] = originalVal;
+  } else {
+    state.vertical_lines[r][c] = originalVal;
+  }
+  
+  return completed;
+}
+
+/**
  * Checks if a move is "safe" (i.e. does not complete the 3rd line of any box, which would give it to the opponent)
  */
 function isMoveSafe(state: GameState, move: GameMove): boolean {
@@ -82,8 +107,8 @@ function getMediumMove(state: GameState): GameMove | null {
 
   // 1. Check if any move immediately completes a box (scoring opportunity)
   for (const move of legalMoves) {
-    const completed = checkCompletedBoxes(state, move);
-    if (completed.length > 0) {
+    const completedCount = checkIfMoveCompletesBox(state, move);
+    if (completedCount > 0) {
       return move;
     }
   }
@@ -97,7 +122,7 @@ function getMediumMove(state: GameState): GameMove | null {
 
   // 3. No safe moves exist; play a random move that minimizes box creation (or just random)
   // Let's look for a move that creates a 3rd line in a box that has only 1 line, rather than 2 lines, if possible.
-  // But a random legal move is a solid fallback for Medium.
+  // Play fallback.
   const randomIndex = Math.floor(Math.random() * legalMoves.length);
   return legalMoves[randomIndex];
 }
@@ -111,7 +136,7 @@ function getHardMove(state: GameState, botId: string, playerId: string): GameMov
 
   // 1. Always take immediate box completion if it's there
   for (const move of legalMoves) {
-    if (checkCompletedBoxes(state, move).length > 0) {
+    if (checkIfMoveCompletesBox(state, move) > 0) {
       return move;
     }
   }
@@ -159,8 +184,8 @@ function minimax(
 
   // Sort moves: put moves that complete boxes or are safe first to improve pruning
   legalMoves.sort((a, b) => {
-    const aCompletes = checkCompletedBoxes(state, a).length > 0 ? 1 : 0;
-    const bCompletes = checkCompletedBoxes(state, b).length > 0 ? 1 : 0;
+    const aCompletes = checkIfMoveCompletesBox(state, a) > 0 ? 1 : 0;
+    const bCompletes = checkIfMoveCompletesBox(state, b) > 0 ? 1 : 0;
     if (aCompletes !== bCompletes) return bCompletes - aCompletes;
 
     const aSafe = isMoveSafe(state, a) ? 1 : 0;
@@ -174,7 +199,7 @@ function minimax(
     let maxEval = -Infinity;
     for (const move of legalMoves) {
       const cloned = cloneState(state);
-      const completed = checkCompletedBoxes(cloned, move).length;
+      const completed = checkIfMoveCompletesBox(cloned, move);
       makeMove(cloned, move, botId);
 
       // In Dots & Boxes, if a player completes a box, they get another turn!
@@ -196,7 +221,7 @@ function minimax(
     let minEval = Infinity;
     for (const move of legalMoves) {
       const cloned = cloneState(state);
-      const completed = checkCompletedBoxes(cloned, move).length;
+      const completed = checkIfMoveCompletesBox(cloned, move);
       makeMove(cloned, move, playerId);
 
       // If player completes a box, they get another turn (isBotTurn stays false)
