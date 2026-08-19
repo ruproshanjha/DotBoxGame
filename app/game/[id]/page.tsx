@@ -80,15 +80,21 @@ export default function GamePage() {
         )
         .subscribe();
 
+      // Fallback Polling every 3 seconds to keep state fresh under WebSocket failures
+      const pollInterval = setInterval(() => {
+        fetchMultiplayerGame(true);
+      }, 3000);
+
       return () => {
         supabase.removeChannel(channel);
+        clearInterval(pollInterval);
       };
     }
   }, [id, user, loading]);
 
-  const fetchMultiplayerGame = async () => {
+  const fetchMultiplayerGame = async (quiet = false) => {
     try {
-      setGameLoading(true);
+      if (!quiet) setGameLoading(true);
       const { data: game, error } = await supabase
         .from('games')
         .select(`
@@ -111,10 +117,12 @@ export default function GamePage() {
       }
     } catch (err) {
       console.error('Error fetching multiplayer game:', err);
-      alert('Failed to load the game. It might have ended or is invalid.');
-      router.replace('/dashboard');
+      if (!quiet) {
+        alert('Failed to load the game. It might have ended or is invalid.');
+        router.replace('/dashboard');
+      }
     } finally {
-      setGameLoading(false);
+      if (!quiet) setGameLoading(false);
     }
   };
 
@@ -205,6 +213,9 @@ export default function GamePage() {
         const res = typeof data === 'string' ? JSON.parse(data) : data;
         if (!res.success) {
           alert(`Move rejected: ${res.error}`);
+        } else {
+          // Immediately refresh the board after making a successful move
+          fetchMultiplayerGame(true);
         }
       } catch (err) {
         console.error('Submit move error:', err);
