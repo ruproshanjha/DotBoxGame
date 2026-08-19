@@ -28,7 +28,9 @@ export default function DashboardPage() {
   // Modal States
   const [isJoinModalOpen, setIsJoinModalOpen] = useState(false);
   const [isBotModalOpen, setIsBotModalOpen] = useState(false);
+  const [isCreateRoomModalOpen, setIsCreateRoomModalOpen] = useState(false);
   const [isMatchingOpen, setIsMatchingOpen] = useState(false);
+  const [selectedGridSize, setSelectedGridSize] = useState<number>(4);
 
   // Form inputs
   const [roomCodeInput, setRoomCodeInput] = useState('');
@@ -192,6 +194,7 @@ export default function DashboardPage() {
   const handleCreateRoom = async () => {
     if (!user) return;
     try {
+      setIsCreateRoomModalOpen(false);
       // Generate a short 6 character uppercase code
       const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
       let roomCode = '';
@@ -204,7 +207,7 @@ export default function DashboardPage() {
         .from('games')
         .insert({
           player1_id: user.id,
-          board_size: 4,
+          board_size: selectedGridSize,
           status: 'waiting',
           game_mode: 'private',
         })
@@ -288,7 +291,7 @@ export default function DashboardPage() {
 
   // 4. BOT GAME LOBBY REDIRECT
   const handleStartBotGame = (difficulty: string) => {
-    router.push(`/game/bot?difficulty=${difficulty}`);
+    router.push(`/game/bot?difficulty=${difficulty}&grid=${selectedGridSize}`);
   };
 
   if (loading || !user || !profile) {
@@ -389,7 +392,10 @@ export default function DashboardPage() {
             
             <div className="relative z-10 grid grid-cols-2 gap-3 mt-6">
               <button
-                onClick={handleCreateRoom}
+                onClick={() => {
+                  setSelectedGridSize(4); // Default to Classic
+                  setIsCreateRoomModalOpen(true);
+                }}
                 className="py-3 rounded-2xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-sm transition-all shadow-[0_5px_15px_rgba(16,185,129,0.2)] active:scale-[0.98] cursor-pointer"
               >
                 Create Room
@@ -616,6 +622,34 @@ export default function DashboardPage() {
               Test your skills against our AI engine. ELO rankings are not affected in bot games.
             </p>
 
+            {/* Grid Size Selector */}
+            <div className="mb-6">
+              <label className="text-[10px] font-bold text-gray-500 tracking-wider uppercase mb-2 block text-left">
+                Select Grid Size
+              </label>
+              <div className="grid grid-cols-3 gap-2">
+                {[
+                  { size: 3, label: '3x3', desc: 'Small' },
+                  { size: 4, label: '4x4', desc: 'Classic' },
+                  { size: 5, label: '5x5', desc: 'Large' },
+                ].map((opt) => (
+                  <button
+                    key={opt.size}
+                    type="button"
+                    onClick={() => setSelectedGridSize(opt.size)}
+                    className={`py-3 rounded-2xl border font-bold transition-all text-center flex flex-col items-center justify-center cursor-pointer ${
+                      selectedGridSize === opt.size
+                        ? 'bg-amber-600/10 border-amber-500 text-amber-400 shadow-[0_0_15px_rgba(245,158,11,0.15)]'
+                        : 'bg-gray-900 border-gray-800 text-gray-400 hover:border-gray-700 hover:text-gray-300'
+                    }`}
+                  >
+                    <span className="text-sm font-black">{opt.label}</span>
+                    <span className="text-[9px] font-semibold opacity-60 uppercase">{opt.desc}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
             <div className="flex flex-col gap-3">
               <button
                 onClick={() => handleStartBotGame('easy')}
@@ -656,6 +690,61 @@ export default function DashboardPage() {
                 </span>
               </button>
             </div>
+          </div>
+        </div>
+      )}
+      {/* 4. CREATE ROOM LOBBY SETTINGS MODAL */}
+      {isCreateRoomModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-6">
+          <div className="w-full max-w-sm glass-panel p-8 rounded-3xl border border-emerald-500/30 shadow-2xl flex flex-col animate-claim-pop">
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-xl font-black text-white">Create Private Room</h3>
+              <button
+                onClick={() => setIsCreateRoomModalOpen(false)}
+                className="text-gray-500 hover:text-gray-300 transition-all cursor-pointer"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <p className="text-xs text-gray-400 mb-6 leading-relaxed">
+              Choose your match grid size. You will generate a room lobby code to share with a friend.
+            </p>
+
+            {/* Grid Size Selector */}
+            <div className="mb-8">
+              <label className="text-[10px] font-bold text-gray-500 tracking-wider uppercase mb-2 block text-left">
+                Select Grid Size
+              </label>
+              <div className="grid grid-cols-3 gap-2">
+                {[
+                  { size: 3, label: '3x3', desc: 'Small' },
+                  { size: 4, label: '4x4', desc: 'Classic' },
+                  { size: 5, label: '5x5', desc: 'Large' },
+                ].map((opt) => (
+                  <button
+                    key={opt.size}
+                    type="button"
+                    onClick={() => setSelectedGridSize(opt.size)}
+                    className={`py-3 rounded-2xl border font-bold transition-all text-center flex flex-col items-center justify-center cursor-pointer ${
+                      selectedGridSize === opt.size
+                        ? 'bg-emerald-600/10 border-emerald-500 text-emerald-400 shadow-[0_0_15px_rgba(16,185,129,0.15)]'
+                        : 'bg-gray-900 border-gray-800 text-gray-400 hover:border-gray-700 hover:text-gray-300'
+                    }`}
+                  >
+                    <span className="text-sm font-black">{opt.label}</span>
+                    <span className="text-[9px] font-semibold opacity-60 uppercase">{opt.desc}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <button
+              onClick={handleCreateRoom}
+              className="w-full py-3.5 rounded-2xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-sm transition-all shadow-[0_5px_15px_rgba(16,185,129,0.2)] active:scale-[0.98] cursor-pointer"
+            >
+              Start Lobby
+            </button>
           </div>
         </div>
       )}

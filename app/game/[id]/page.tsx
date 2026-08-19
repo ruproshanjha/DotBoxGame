@@ -158,7 +158,9 @@ export default function GamePage() {
 
     if (isBotGame) {
       // Local Bot Game initialization
-      const localGame = createGame(user.id, 'bot', 'bot', 4);
+      const gridQuery = searchParams.get('grid');
+      const boardSize = gridQuery ? parseInt(gridQuery, 10) : 4;
+      const localGame = createGame(user.id, 'bot', 'bot', boardSize);
       setGameState(localGame);
       setOpponentProfile({
         display_name: `${difficulty.charAt(0).toUpperCase() + difficulty.slice(1)} Bot`,
