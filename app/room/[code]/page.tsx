@@ -103,8 +103,14 @@ export default function RoomLobbyPage() {
       )
       .subscribe();
 
+    // Fallback Polling every 3 seconds to keep room lobby synced under WebSocket failures
+    const pollInterval = setInterval(() => {
+      fetchRoomData();
+    }, 3000);
+
     return () => {
       supabase.removeChannel(channel);
+      clearInterval(pollInterval);
     };
   }, [user, loading, formattedCode]);
 
