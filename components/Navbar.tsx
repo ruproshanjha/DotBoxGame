@@ -73,9 +73,11 @@ export default function Navbar() {
                   <span className="text-xs font-semibold text-gray-300 leading-none max-w-[120px] truncate">
                     {profile.display_name}
                   </span>
-                  <span className="text-[10px] font-black text-emerald-400 mt-0.5 tracking-wider leading-none">
-                    ⭐ {profile.rating}
-                  </span>
+                  <div className="flex items-center gap-1.5 mt-0.5 text-[9px] font-black leading-none">
+                    <span className="text-emerald-400">⭐ {profile.rating}</span>
+                    <span className="text-gray-500">&bull;</span>
+                    <span className="text-amber-400">✨ {profile.xp} XP</span>
+                  </div>
                 </div>
               </div>
             )}

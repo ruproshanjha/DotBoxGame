@@ -13,6 +13,7 @@ export interface UserProfile {
   games_played: number;
   games_won: number;
   games_lost: number;
+  xp: number;
   created_at: string;
 }
 

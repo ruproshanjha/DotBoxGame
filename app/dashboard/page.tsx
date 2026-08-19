@@ -95,7 +95,8 @@ export default function DashboardPage() {
       if (error) throw error;
       setRecentGames((data as any) || []);
     } catch (err) {
-      console.error('Error fetching recent games:', err);
+      const errAny = err as any;
+      console.error('Error fetching recent games:', errAny?.message || errAny, errAny?.details, errAny?.hint);
     } finally {
       setGamesLoading(false);
     }
@@ -322,10 +323,14 @@ export default function DashboardPage() {
             <p className="text-gray-400 text-sm mt-1">Ready for your next move?</p>
           </div>
           
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 w-full md:w-auto">
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-4 w-full md:w-auto">
             <div className="bg-gray-900/50 border border-gray-800 px-5 py-3 rounded-2xl text-center min-w-[100px]">
               <span className="text-xs text-gray-500 font-bold block mb-1 uppercase tracking-wider">Rating</span>
               <span className="text-2xl font-black text-violet-400">{profile.rating}</span>
+            </div>
+            <div className="bg-gray-900/50 border border-gray-800 px-5 py-3 rounded-2xl text-center min-w-[100px]">
+              <span className="text-xs text-gray-500 font-bold block mb-1 uppercase tracking-wider">XP</span>
+              <span className="text-2xl font-black text-amber-400">{profile.xp}</span>
             </div>
             <div className="bg-gray-900/50 border border-gray-800 px-5 py-3 rounded-2xl text-center min-w-[100px]">
               <span className="text-xs text-gray-500 font-bold block mb-1 uppercase tracking-wider">Games</span>

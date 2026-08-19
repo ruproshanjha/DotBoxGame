@@ -26,6 +26,7 @@ create table public.profiles (
   games_played integer default 0 not null,
   games_won integer default 0 not null,
   games_lost integer default 0 not null,
+  xp integer default 0 not null,
   created_at timestamptz default now() not null
 );
 
@@ -140,13 +141,14 @@ begin
   v_display_name := coalesce(new.raw_user_meta_data->>'full_name', new.raw_user_meta_data->>'name', split_part(new.email, '@', 1));
   v_username := coalesce(new.raw_user_meta_data->>'custom_username', split_part(new.email, '@', 1) || '_' || substr(md5(random()::text), 1, 4));
   
-  insert into public.profiles (id, username, display_name, avatar_url, rating, games_played, games_won, games_lost)
+  insert into public.profiles (id, username, display_name, avatar_url, rating, games_played, games_won, games_lost, xp)
   values (
     new.id,
     v_username,
     v_display_name,
     coalesce(new.raw_user_meta_data->>'avatar_url', ''),
     1000,
+    0,
     0,
     0,
     0
@@ -172,21 +174,38 @@ declare
   v_k int := 32;
   v_r1_new int;
   v_r2_new int;
+  v_xp1_add int;
+  v_xp2_add int;
 begin
+  -- 1. Determine XP awards
+  if new.winner_id is null then
+    -- Draw
+    v_xp1_add := 15;
+    v_xp2_add := 15;
+  elsif new.winner_id = new.player1_id then
+    v_xp1_add := 25;
+    v_xp2_add := 10;
+  else
+    v_xp1_add := 10;
+    v_xp2_add := 25;
+  end if;
+
   -- Only update ratings for quick (ranked) games between two human players
   if new.game_mode <> 'quick' or new.player2_id is null then
-    -- But we still update the general games_played statistics for profiles!
+    -- But we still update the general games_played and XP statistics for profiles!
     update public.profiles
     set games_played = games_played + 1,
         games_won = case when id = new.winner_id then games_won + 1 else games_won end,
-        games_lost = case when id <> new.winner_id and new.winner_id is not null then games_lost + 1 else games_lost end
+        games_lost = case when id <> new.winner_id and new.winner_id is not null then games_lost + 1 else games_lost end,
+        xp = xp + (case when id = new.player1_id then v_xp1_add else v_xp2_add end)
     where id = new.player1_id;
 
     if new.player2_id is not null then
       update public.profiles
       set games_played = games_played + 1,
           games_won = case when id = new.winner_id then games_won + 1 else games_won end,
-          games_lost = case when id <> new.winner_id and new.winner_id is not null then games_lost + 1 else games_lost end
+          games_lost = case when id <> new.winner_id and new.winner_id is not null then games_lost + 1 else games_lost end,
+          xp = xp + (case when id = new.player2_id then v_xp2_add else v_xp1_add end)
       where id = new.player2_id;
     end if;
 
@@ -229,14 +248,16 @@ begin
   set rating = v_r1_new,
       games_played = games_played + 1,
       games_won = case when id = new.winner_id then games_won + 1 else games_won end,
-      games_lost = case when id <> new.winner_id and new.winner_id is not null then games_lost + 1 else games_lost end
+      games_lost = case when id <> new.winner_id and new.winner_id is not null then games_lost + 1 else games_lost end,
+      xp = xp + v_xp1_add
   where id = new.player1_id;
 
   update public.profiles
   set rating = v_r2_new,
       games_played = games_played + 1,
       games_won = case when id = new.winner_id then games_won + 1 else games_won end,
-      games_lost = case when id <> new.winner_id and new.winner_id is not null then games_lost + 1 else games_lost end
+      games_lost = case when id <> new.winner_id and new.winner_id is not null then games_lost + 1 else games_lost end,
+      xp = xp + v_xp2_add
   where id = new.player2_id;
 
   return new;

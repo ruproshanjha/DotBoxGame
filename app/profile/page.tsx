@@ -156,11 +156,19 @@ export default function ProfilePage() {
 
           <p className="text-xs text-gray-500 tracking-wider font-semibold mb-8">@{profile.username}</p>
 
-          {/* ELO Rating Badge */}
-          <div className="mb-10 inline-flex items-center gap-2 px-5 py-2.5 rounded-2xl bg-gray-900/60 border border-gray-900 shadow-md">
-            <Trophy size={16} className="text-yellow-500" />
-            <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Rating:</span>
-            <span className="text-lg font-black text-violet-400">{profile.rating}</span>
+          {/* Rating and XP Badges */}
+          <div className="flex gap-3 mb-10">
+            <div className="inline-flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-gray-900/60 border border-gray-900 shadow-md">
+              <Trophy size={16} className="text-yellow-500" />
+              <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Rating:</span>
+              <span className="text-base font-black text-violet-400">{profile.rating}</span>
+            </div>
+
+            <div className="inline-flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-gray-900/60 border border-gray-900 shadow-md">
+              <Sparkles size={16} className="text-amber-500" />
+              <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">XP:</span>
+              <span className="text-base font-black text-amber-400">{profile.xp}</span>
+            </div>
           </div>
 
           {/* Stats Metrics Grid */}
