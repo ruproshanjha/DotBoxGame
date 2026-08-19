@@ -60,6 +60,8 @@ export function createGame(
     status: gameMode === 'private' && !player2Id ? 'waiting' : 'playing',
     winner_id: null,
     game_mode: gameMode,
+    updated_at: new Date().toISOString(),
+    created_at: new Date().toISOString(),
   };
 }
 
@@ -248,6 +250,8 @@ export function makeMove(state: GameState, move: GameMove, playerId: string): Ga
       state.winner_id = null; // Draw
     }
   }
+
+  state.updated_at = new Date().toISOString();
 
   return state;
 }

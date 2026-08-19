@@ -310,7 +310,7 @@ export default function GamePage() {
 
       return () => clearTimeout(botTimer);
     }
-  }, [gameState?.current_player_id, gameState?.status, isBotGame]);
+  }, [gameState?.current_player_id, gameState?.status, gameState?.updated_at, isBotGame]);
 
   // 3. BOT GAME SAVER EFFECT
   useEffect(() => {
